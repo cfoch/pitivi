@@ -2,7 +2,7 @@
 #
 #       pitivi/medialibrary.py
 #
-# Copyright (c) 2012, Fabián Orccón <fabian.orccon@pucp.pe>
+# Copyright (c) 2012, Fabian Orccon <fabian.orccon@pucp.pe>
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
