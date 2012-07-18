@@ -57,7 +57,7 @@ from pitivi.mediafilespreviewer import PreviewWidget
 from pitivi.clipproperties import ClipProperties
 from pitivi.configure import pitivi_version, APPNAME, APPURL, \
      get_pixmap_dir, get_ui_dir
-
+from pitivi.dialogs.stopmotion import StopMotionDialog
 
 GlobalSettings.addConfigOption("fileSupportEnabled",
     environment="PITIVI_FILE_SUPPORT",
@@ -216,6 +216,10 @@ class PitiviMainWindow(gtk.Window, Loggable):
         self.app.action_log.connect("undo", self._actionLogUndo)
         self.app.action_log.connect("redo", self._actionLogRedo)
         self.app.action_log.connect("cleaned", self._actionLogCleaned)
+
+        #FIXME: stopmotion (por mientras)
+        #foo = StopMotionDialog(self.app)
+        #foo.run()
 
     def showRenderDialog(self, project):
         """

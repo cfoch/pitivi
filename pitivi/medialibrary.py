@@ -4,6 +4,7 @@
 #
 # Copyright (c) 2005, Edward Hervey <bilboed@bilboed.com>
 # Copyright (c) 2009, Alessandro Decina <alessandro.d@gmail.com>
+# Copyright (c) 2012, Fabián Orccón <fabian.orccon@pucp.pe>
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -48,6 +49,7 @@ from pitivi.utils.signal import SignalGroup, Signallable
 from pitivi.utils.loggable import Loggable
 import pitivi.utils.ui as dnd
 from pitivi.utils.ui import beautify_info, info_name, SPACING, PADDING
+from pitivi.dialogs.stopmotion import StopMotionDialog
 
 SHOW_TREEVIEW = 1
 SHOW_ICONVIEW = 2
@@ -293,14 +295,17 @@ class MediaLibraryWidget(gtk.VBox, Loggable):
         self.popup_playmenuitem = gtk.MenuItem(_("_Preview Clip"))
         self.popup_clipprop = gtk.MenuItem(_("_Clip Properties..."))
         self.popup_insertEnd = gtk.MenuItem(_("Insert at _End of Timeline"))
+        self.popup_stopmotion = gtk.MenuItem(_("Create stop motion animation"))
         self.popup_remitem.connect("activate", self._removeClickedCb)
         self.popup_playmenuitem.connect("activate", self._previewClickedCb)
         self.popup_clipprop.connect("activate", self._clipPropertiesCb)
         self.popup_insertEnd.connect("activate", self._insertEndCb)
+        self.popup_stopmotion.connect("activate", self._createStopMotionCb)
         self.popup.append(self.popup_insertEnd)
         self.popup.append(self.popup_remitem)
         self.popup.append(self.popup_playmenuitem)
         self.popup.append(self.popup_clipprop)
+        self.popup.append(self.popup_stopmotion)
         self.popup.show_all()
 
         # import sources dialogbox
@@ -557,6 +562,18 @@ class MediaLibraryWidget(gtk.VBox, Loggable):
         self.app.gui.timeline_ui.insertEnd(sources)
 
         self._sources_to_insert = self.getSelectedItems()
+
+    def _createStopMotionCb(self, unused_action):
+        quantity = len(self.getSelectedPaths())
+        dialog = StopMotionDialog(self.app, quantity)
+        dialog.run()
+        items = sorted(self.getSelectedItems())
+        if dialog.duration != None:
+            sources = []
+            for uri in self.getSelectedItems():
+                sources.append(ges.TimelineFileSource(uri))
+                sources[len(sources) - 1].set_duration(dialog.duration)
+            self.app.gui.timeline_ui.insertEnd(sources)
 
     def _disableKeyboardShortcutsCb(self, *unused_args):
         """
@@ -1022,6 +1039,28 @@ class MediaLibraryWidget(gtk.VBox, Loggable):
     def _nothingUnderMouse(self, view, event):
         return not bool(view.get_path_at_pos(int(event.x), int(event.y)))
 
+    def _areImagesFiles(self):
+        ext = (
+            "jpg",
+            "jpeg",
+            "JPG",
+            "JPEG",
+            "png",
+            "PNG"
+        )
+        is_image = True
+        paths = self.getSelectedItems()
+        if len(paths) > 0:
+            i = 0
+            while is_image and (i < len(paths)):
+                if not (paths[i].split(".")[-1:][0] in ext):
+                    is_image = False
+                i += 1
+
+        else:
+            is_image = False
+        return is_image
+
     def _viewShowPopup(self, view, event):
         """
         Handle the sensitivity of popup menu items when right-clicking.
@@ -1031,15 +1070,20 @@ class MediaLibraryWidget(gtk.VBox, Loggable):
         self.popup_playmenuitem.set_sensitive(False)
         self.popup_clipprop.set_sensitive(False)
         self.popup_insertEnd.set_sensitive(False)
+        self.popup_stopmotion.set_sensitive(False)
 
         multiple_selected = len(self.getSelectedPaths()) > 1
         if view != None and self._rowUnderMouseSelected(view, event):
             # An item was already selected, then the user right-clicked on it
             self.popup_insertEnd.set_sensitive(True)
             self.popup_remitem.set_sensitive(True)
+            if self._areImagesFiles():
+                self.popup_stopmotion.set_sensitive(True)
+
             if not multiple_selected:
                 self.popup_playmenuitem.set_sensitive(True)
                 self.popup_clipprop.set_sensitive(True)
+
         elif view != None and (not self._nothingUnderMouse(view, event)):
             if not event.state & (gtk.gdk.CONTROL_MASK | gtk.gdk.SHIFT_MASK):
                 # An item was previously selected, and the user
@@ -1058,6 +1102,9 @@ class MediaLibraryWidget(gtk.VBox, Loggable):
             self._viewSelectPath(self._viewGetPathAtPos(event))
             self.popup_insertEnd.set_sensitive(True)
             self.popup_remitem.set_sensitive(True)
+            if self._areImagesFiles():
+                self.popup_stopmotion.set_sensitive(True)
+
             if not multiple_selected:
                 self.popup_playmenuitem.set_sensitive(True)
                 self.popup_clipprop.set_sensitive(True)
