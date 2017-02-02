@@ -348,6 +348,16 @@
             ]
         },
         {
+            "name": "libpeas",
+            "sources": [
+                {
+                    "type": "git",
+                    "url": "https://github.com/cfoch/libpeas.git",
+                    "branch": "DeprecateGParameter"
+                }
+            ]
+        },
+        {
             "name": "pitivi",
             "config-opts": ["--libdir=lib", "--prefix=/app"],
             "build-options" : {
