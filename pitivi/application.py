@@ -26,12 +26,15 @@ from gi.repository import Gio
 from gi.repository import GObject
 from gi.repository import Gst
 from gi.repository import Gtk
+from gi.repository import Peas
 
 from pitivi.configure import RELEASES_URL
 from pitivi.configure import VERSION
+from pitivi.dialogs.pluginmanager import PluginManagerDialog
 from pitivi.dialogs.startupwizard import StartUpWizard
 from pitivi.effects import EffectsManager
 from pitivi.mainwindow import MainWindow
+from pitivi.pluginmanager import PluginManager
 from pitivi.project import ProjectManager
 from pitivi.settings import get_dir
 from pitivi.settings import GlobalSettings
@@ -76,6 +79,7 @@ class Pitivi(Gtk.Application, Loggable):
         self.threads = None
         self.effects = None
         self.system = None
+        self.plugin_manager = None
         self.project_manager = ProjectManager(self)
 
         self.action_log = None
@@ -144,6 +148,7 @@ class Pitivi(Gtk.Application, Loggable):
         self.effects = EffectsManager()
         self.proxy_manager = ProxyManager(self)
         self.system = get_system()
+        self.plugin_manager = PluginManager(self)
 
         self.project_manager.connect(
             "new-project-loading", self._newProjectLoadingCb)
@@ -179,6 +184,12 @@ class Pitivi(Gtk.Application, Loggable):
         self.shortcuts.add("app.shortcuts_window",
                            ["<Primary>F1", "<Primary>question"],
                            _("Show the Shortcuts Window"))
+
+        self.plugin_manager_action = Gio.SimpleAction.new("plugin_manager", None)
+        self.plugin_manager_action.connect("activate", self._show_plugin_manager_cb)
+        self.add_action(self.plugin_manager_action)
+        # TODO
+        # Add shortcut for the plugin manager.
 
     def do_activate(self):
         if self.gui:
@@ -355,6 +366,10 @@ class Pitivi(Gtk.Application, Loggable):
 
     def _show_shortcuts_cb(self, unused_action, unused_param):
         show_shortcuts(self)
+
+    def _show_plugin_manager_cb(self, unused_action, unused_param):
+        dialog = PluginManagerDialog(self.plugin_manager.engine, self.gui)
+        dialog.run()
 
     def _action_log_pre_push_cb(self, unused_action_log, action):
         try:
