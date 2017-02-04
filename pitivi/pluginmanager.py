@@ -28,6 +28,7 @@ from gi.repository import Peas
 from gi.repository import PeasGtk
 
 from pitivi.configure import get_plugins_dir
+from pitivi.configure import get_user_plugins_dir
 
 class API(GObject.GObject):
     def __init__(self, app):
@@ -66,9 +67,13 @@ class PluginManager:
 
     def _setup_plugins_dir(self):
         plugins_dir = get_plugins_dir()
+        user_plugins_dir = get_user_plugins_dir()
         if not os.path.exists(plugins_dir):
             os.makedirs(plugins_dir)
+        if not os.path.exists(user_plugins_dir):
+            os.makedirs(user_plugins_dir)
         self.engine.add_search_path(plugins_dir)
+        self.engine.add_search_path(user_plugins_dir)
 
     def __extension_removed_cb(self, unused_set, unused_plugin_info, extension):
         extension.deactivate()
