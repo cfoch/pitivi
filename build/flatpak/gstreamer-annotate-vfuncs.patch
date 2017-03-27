@@ -1,0 +1,59 @@
+From 85f72344688b94a3c6c3a29b3e668afc3ab1446b Mon Sep 17 00:00:00 2001
+From: Fabian Orccon <cfoch.fabian@gmail.com>
+Date: Thu, 23 Mar 2017 14:30:08 -0500
+Subject: [PATCH] Add annotations to vfuncs in base sources
+
+The following vfuncs have been annotated:
+- GstBaseSrcClass::query
+- GstPushSrcClass::create
+---
+ libs/gst/base/gstbasesrc.h | 10 +++++++++-
+ libs/gst/base/gstpushsrc.h | 11 +++++++++++
+ 2 files changed, 20 insertions(+), 1 deletion(-)
+
+diff --git a/libs/gst/base/gstbasesrc.h b/libs/gst/base/gstbasesrc.h
+index a89c8a8..f165588 100644
+--- a/libs/gst/base/gstbasesrc.h
++++ b/libs/gst/base/gstbasesrc.h
+@@ -211,7 +211,15 @@ struct _GstBaseSrcClass {
+   /* Clear any pending unlock request, as we succeeded in unlocking */
+   gboolean      (*unlock_stop)  (GstBaseSrc *src);
+ 
+-  /* notify subclasses of a query */
++  /**
++   * GstBaseSrcClass::query
++   * @src: base source instance
++   * @query: (transfer none): a query
++   *
++   * Notify subclasses of a query
++   *
++   * Returns: %TRUE or %FALSE
++   */
+   gboolean      (*query)        (GstBaseSrc *src, GstQuery *query);
+ 
+   /* notify subclasses of an event */
+diff --git a/libs/gst/base/gstpushsrc.h b/libs/gst/base/gstpushsrc.h
+index 3419730..dce54b6 100644
+--- a/libs/gst/base/gstpushsrc.h
++++ b/libs/gst/base/gstpushsrc.h
+@@ -72,6 +72,17 @@ struct _GstPushSrcClass {
+ 
+   /* ask the subclass to create a buffer, the default implementation
+    * uses alloc and fill */
++
++  /**
++   * GstPushSrcClass::create:
++   * @src: the source
++   * @buf: (out) (allow-none): the output buffer
++   *
++   * Ask the subclass to create a buffer, the default implementation
++   * uses alloc and fill.
++   *
++   * Returns: #GstFlowReturn
++   */
+   GstFlowReturn (*create) (GstPushSrc *src, GstBuffer **buf);
+   /* allocate memory for a buffer */
+   GstFlowReturn (*alloc)  (GstPushSrc *src, GstBuffer **buf);
+-- 
+2.9.3
+

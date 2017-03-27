@@ -40,9 +40,18 @@ SDK_BRANCH = {"0.96": "3.20",
               "0.97.1": "3.20",
               "0.98": "3.22",
               "stable": "3.22",
-              "master": "3.22"}
+              "master": "3.24"}
 FLATPAK_REQ = "0.6.4"
 
+BLENDER_MODULES = (
+    "libglu",
+    "glew",
+    "IlmBase",
+    "OpenEXR",
+    "boost",
+    "openimageio",
+    "blender"
+)
 
 class Colors:  # pylint: disable=too-few-public-methods
     HEADER = "\033[95m"
@@ -72,7 +81,7 @@ class Console:  # pylint: disable=too-few-public-methods
         sys.stdout.flush()
 
 
-def expand_json_file(json_template, outfile, basedir, gst_version, branchname):
+def expand_json_file(json_template, outfile, basedir, gst_version, branchname, with_blender):
     """Creates the manifest file."""
     try:
         os.remove(outfile)
@@ -95,10 +104,15 @@ def expand_json_file(json_template, outfile, basedir, gst_version, branchname):
                     outfile, gst_version)
 
     for module in template["modules"]:
+        if with_blender:
+            if module["name"] in BLENDER_MODULES:
+                print("blender: ", module["name"])
+                module["disabled"] = False
+
         if module["sources"][0]["type"] != "git":
             continue
 
-        if module["name"].startswith("gst"):
+        if module["name"].startswith("gst") and module["name"] != "gst-editing-services":
             module["sources"][0]["branch"] = gst_version
             if gst_version != "master":
                 continue
@@ -514,7 +528,7 @@ class PitiviFlatpak:  # pylint: disable=too-many-instance-attributes
                 self.scriptdir, "%s.template.json" % self.name.lower())
             expand_json_file(json_template, self.json,
                              self.local_repos_path, self.gst_version,
-                             self.branch)
+                             self.branch, self.with_blender)
 
             builder_args = ["flatpak-builder",
                             "--ccache", self.prefix, self.json]
@@ -666,6 +680,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Generate static deltas (check 'man flatpak-build-update-repo'"
         " for more information)")
+
+    extras = parser.add_argument_group("Extras")
+    extras.add_argument("--with-blender",
+                        action="store_true",
+                        help="Build Blender as a Python Module.")
 
     parser.parse_args(namespace=app_flatpak)
     app_flatpak.clean_args()

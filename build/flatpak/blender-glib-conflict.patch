@@ -1,0 +1,25 @@
+From 04b11832715e76ab503484015f7a12b1606d1ef6 Mon Sep 17 00:00:00 2001
+From: Fabian Orccon <cfoch.fabian@gmail.com>
+Date: Thu, 23 Mar 2017 18:48:01 -0500
+Subject: [PATCH] Make 'struct AtExitData' a static data type
+
+---
+ source/blender/blenkernel/intern/blender.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/source/blender/blenkernel/intern/blender.c b/source/blender/blenkernel/intern/blender.c
+index a867039..afd6010 100644
+--- a/source/blender/blenkernel/intern/blender.c
++++ b/source/blender/blenkernel/intern/blender.c
+@@ -234,7 +234,7 @@ int BKE_blender_test_break(void)
+  * \note Don't use MEM_mallocN so functions can be registered at any time.
+  * \{ */
+ 
+-struct AtExitData {
++static struct AtExitData {
+ 	struct AtExitData *next;
+ 
+ 	void (*func)(void *user_data);
+-- 
+2.9.3
+
