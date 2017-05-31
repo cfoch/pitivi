@@ -23,6 +23,13 @@ from gi.repository import Peas
 
 from pitivi.configure import get_plugins_dir
 from pitivi.configure import get_user_plugins_dir
+from pitivi.settings import GlobalSettings
+
+
+GlobalSettings.addConfigSection("plugins")
+GlobalSettings.addConfigOption("ActivePlugins",
+                               section="plugins", key="active-plugins",
+                               default=[])
 
 
 class API(GObject.GObject):
@@ -45,6 +52,12 @@ class PluginManager:
     def __init__(self, app):
         self.app = app
         self.engine = Peas.Engine.get_default()
+        # Many plugins need access to the main window. However, by the time a
+        # plugin is loaded from settings (as soon Pitivi application starts),
+        # the main window doesn't exist yet. So we load plugins from settings
+        # after the main window is added.
+        self.app.connect("window-added", self.__window_added_cb)
+        self.engine.connect("notify::loaded-plugins", self.__loaded_plugins_cb)
 
         for loader in self.LOADERS:
             self.engine.enable_loader(loader)
@@ -56,6 +69,14 @@ class PluginManager:
     def plugins(self):
         """Gets the engine's plugin list."""
         return self.engine.get_plugin_list()
+
+    def _load_plugins(self):
+        """Loads plugins from settings."""
+        plugin_names = self.app.settings.ActivePlugins
+        for plugin_name in plugin_names:
+            plugin_info = self.engine.get_plugin_info(plugin_name)
+            if plugin_info in self.plugins:
+                self.engine.load_plugin(plugin_info)
 
     def _setup_extension_set(self):
         plugin_iface = API(self.app)
@@ -84,3 +105,9 @@ class PluginManager:
     @staticmethod
     def __extension_added_cb(unused_set, unused_plugin_info, extension):
         extension.activate()
+
+    def __window_added_cb(self, unused_app, unused_window):
+        self._load_plugins()
+
+    def __loaded_plugins_cb(self, engine, pspec):
+        self.app.settings.ActivePlugins = engine.get_property("loaded-plugins")
