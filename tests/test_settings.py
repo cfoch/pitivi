@@ -23,6 +23,8 @@ import tempfile
 import unittest
 from unittest import mock
 
+from gi.repository import GObject
+
 from pitivi.settings import ConfigError
 from pitivi.settings import GlobalSettings
 
@@ -141,3 +143,43 @@ class TestGlobalSettings(unittest.TestCase):
 
             settings2 = GlobalSettings()
             self.assertEqual(settings2.sectionNewOptionA, "kermit")
+
+    def test_bind_property(self):
+        class MyGObject(GObject.GObject):
+            # pylint: disable=attribute-defined-outside-init
+            def __init__(self):
+                GObject.GObject.__init__(self)
+
+            @GObject.Property(flags=GObject.ParamFlags.READABLE)
+            def prop_r(self):
+                # pylint: disable=no-self-use
+                return "read-only"
+
+            @GObject.Property(type=str)
+            def prop_rw(self):
+                return self.value
+
+            @prop_rw.setter
+            def prop_rw(self, value):
+                self.value = value
+
+        GlobalSettings.addConfigSection("section")
+        GlobalSettings.addConfigOption("myOptionRW",
+                                       section="section", key="option-rw",
+                                       default="")
+        GlobalSettings.addConfigOption("myOptionR",
+                                       section="section", key="option-r",
+                                       default="")
+
+        settings = GlobalSettings()
+        gobject = MyGObject()
+
+        self.assertEqual(settings.myOptionRW, "")
+        settings.bindProperty(gobject, "prop-rw", "myOptionRW")
+        gobject.prop_rw = "pigs fly"
+        self.assertEqual(settings.myOptionRW, "pigs fly")
+
+        with self.assertRaises(AttributeError):
+            settings.bindProperty(gobject, "prop-rw", "unknownAttribute")
+        with self.assertRaises(ConfigError):
+            settings.bindProperty(gobject, "prop-r", "myOptionR")
