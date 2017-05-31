@@ -91,15 +91,22 @@ class TestGlobalSettings(unittest.TestCase):
                                        key="option-b", default=False)
         GlobalSettings.addConfigOption("section1OptionC", section="section-1",
                                        key="option-c", default="")
+        GlobalSettings.addConfigOption("section1OptionD", section="section-1",
+                                       key="option-d", default=["foo"])
 
         self.assertEqual(GlobalSettings.section1OptionA, 50)
         self.assertEqual(GlobalSettings.section1OptionB, False)
         self.assertEqual(GlobalSettings.section1OptionC, "")
+        self.assertEqual(GlobalSettings.section1OptionD, ["foo"])
 
         conf_file_content = ("[section-1]\n"
                              "option-a = 10\n"
                              "option-b = True\n"
-                             "option-c = Pigs fly\n")
+                             "option-c = Pigs fly\n"
+                             "option-d=\n"
+                             "     elmo\n"
+                             "          knows\n"
+                             "     where you live\n")
 
         with mock.patch("pitivi.settings.xdg_config_home") as xdg_config_home,\
                 tempfile.TemporaryDirectory() as temp_dir:
@@ -111,6 +118,12 @@ class TestGlobalSettings(unittest.TestCase):
         self.assertEqual(settings.section1OptionA, 10)
         self.assertEqual(settings.section1OptionB, True)
         self.assertEqual(settings.section1OptionC, "Pigs fly")
+        expected_d_value = [
+            "elmo",
+            "knows",
+            "where you live"
+        ]
+        self.assertEqual(settings.section1OptionD, expected_d_value)
 
     def test_write_config_file(self):
         GlobalSettings.addConfigSection("section-new")
