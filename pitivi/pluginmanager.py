@@ -23,6 +23,13 @@ from gi.repository import Peas
 
 from pitivi.configure import get_plugins_dir
 from pitivi.configure import get_user_plugins_dir
+from pitivi.settings import GlobalSettings
+
+
+GlobalSettings.addConfigSection('plugins')
+GlobalSettings.addConfigOption("PluginsActivePlugins",
+                               section="plugins", key="active-plugins",
+                               default=[])
 
 
 class API(GObject.GObject):
@@ -40,7 +47,10 @@ class PluginManager:
     def __init__(self, app):
         self.app = app
         self.engine = Peas.Engine.get_default()
-
+        self.app.connect("window-added", self.__window_added_cb)
+        self.app.settings.bindProperty(gobject=self.engine,
+                                       prop='loaded-plugins',
+                                       attrname='PluginsActivePlugins')
         # Set up loaders.
         for loader in self.LOADERS:
             self.engine.enable_loader(loader)
@@ -51,6 +61,13 @@ class PluginManager:
     def get_plugins(self):
         """Gets the engine's plugin list."""
         return self.engine.get_plugin_list()
+
+    def _load_plugins_from_settings(self):
+        plugin_names = self.app.settings.PluginsActivePlugins
+        for plugin_name in plugin_names:
+            plugin_info = self.engine.get_plugin_info(plugin_name)
+            if plugin_info in self.get_plugins():
+                self.engine.load_plugin(plugin_info)
 
     def _setup_extension_set(self):
         plugin_iface = API(self.app)
@@ -79,3 +96,6 @@ class PluginManager:
     @classmethod
     def __extension_added_cb(cls, unused_set, unused_plugin_info, extension):
         extension.activate()
+
+    def __window_added_cb(self, unused_app, unused_window):
+        self._load_plugins_from_settings()

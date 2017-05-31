@@ -137,6 +137,30 @@ class GlobalSettings(GObject.Object, Loggable):
         self._readSettingsFromConfigurationFile()
         self._readSettingsFromEnvironmentVariables()
 
+    def _readValue(self, section, key, type_):
+        if type_ == int or type_ == int:
+            try:
+                value = self._config.getint(section, key)
+            except ValueError:
+                # In previous configurations we incorrectly stored
+                # ints using float values.
+                value = int(self._config.getfloat(section, key))
+        elif type_ == float:
+            value = self._config.getfloat(section, key)
+        elif type_ == bool:
+            value = self._config.getboolean(section, key)
+        elif type_ == list:
+            value = self.getListStr(section, key)
+        else:
+            value = self._config.get(section, key)
+        return value
+
+    def _writeValue(self, section, key, value):
+        if type(value) == list:
+            self.setListStr(section, key, value)
+        else:
+            self._config.set(section, key, str(value))
+
     def _readSettingsFromConfigurationFile(self):
         """Reads the settings from the user configuration file."""
         try:
@@ -153,19 +177,7 @@ class GlobalSettings(GObject.Object, Loggable):
             if not self._config.has_section(section):
                 continue
             if key and self._config.has_option(section, key):
-                if typ == int or typ == int:
-                    try:
-                        value = self._config.getint(section, key)
-                    except ValueError:
-                        # In previous configurations we incorrectly stored
-                        # ints using float values.
-                        value = int(self._config.getfloat(section, key))
-                elif typ == float:
-                    value = self._config.getfloat(section, key)
-                elif typ == bool:
-                    value = self._config.getboolean(section, key)
-                else:
-                    value = self._config.get(section, key)
+                value = self._readValue(section, key, typ)
                 setattr(self, attrname, value)
 
     @classmethod
@@ -210,7 +222,7 @@ class GlobalSettings(GObject.Object, Loggable):
                 self._config.add_section(section)
             if key:
                 if value is not None:
-                    self._config.set(section, key, str(value))
+                    self._writeValue(section, key, value)
                 else:
                     self._config.remove_option(section, key)
         try:
@@ -239,6 +251,81 @@ class GlobalSettings(GObject.Object, Loggable):
     def setDefault(self, attrname):
         """Resets the specified setting to its default value."""
         setattr(self, attrname, self.defaults[attrname])
+
+
+    def getListStr(self, section, option):
+        """Gets the option value from the configuration file parsed as a
+        list of str.
+        Note:
+            A list of strings should be stored as
+            [section-a]
+            option-1:
+                value1
+                value2
+                value3
+        Args:
+            section (str): The section.
+            option (str): The option that belongs to the `section`.
+        Returns:
+            int: The value for the `option` at the given `section`.
+        """
+
+        value = self._config.get(section, option)
+        tokens = [token.strip() for token in value.split('\n') if token]
+        return tokens
+
+    def setListStr(self, section, option, value):
+        """Sets the option value to the configuration file as a list of str.
+
+        Note:
+        If value == ['value1', 'value2', 'value3']
+            [section]
+            option-name=
+                value1
+                value2
+                value3
+        Args:
+            section (str): The section.
+            option (str): The option that belongs to the `section`.
+            value (:obj:`list` of :obj:`str`): The list of values.
+        """
+        if len(value) > 0:
+            value = '\n' + '\n'.join(value)
+            self._config.set(section, option, value)
+        else:
+            self._config.remove_option(section, option)
+
+    def bindProperty(self, gobject, prop, attrname):
+        """Binds a GObject's property to a settings' attribute.
+
+        Whenever a property has been changed in a GObject, the settings'
+        attribute will be updated to the new value.
+
+        Note:
+            The property `prop` should have GObject.ParamFlags.READWRITE flag.
+
+        Args:
+            gobject (:obj:`GObject`): An object.
+            prop (str): The property name.
+            attrname (str): The attribute name in settings.
+        """
+        if not hasattr(self, attrname):
+            raise AttributeError
+        pspec = gobject.find_property(prop)
+        if pspec is None:
+            raise ConfigError("Binding %s to an unexisting property \"%s\"" %
+                              (gobject, prop))
+        elif not (pspec.flags & GObject.ParamFlags.READABLE and
+                  pspec.flags & GObject.ParamFlags.WRITABLE):
+            raise ConfigError("Property \"%s\" should be READWRITE")
+
+        prop = "notify::%s" % prop
+        gobject.connect(prop, self.__bind_property_cb, attrname)
+
+    def __bind_property_cb(self, gobject, pspec, attrname):
+        prop_name = pspec.name
+        value = gobject.get_property(prop_name)
+        setattr(self, attrname, value)
 
     @classmethod
     def addConfigOption(cls, attrname, type_=None, section=None, key=None,
