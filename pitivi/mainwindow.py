@@ -130,6 +130,7 @@ class MainWindow(Gtk.ApplicationWindow, Loggable):
         self.app = app
         self.log("Creating MainWindow")
         self.settings = app.settings
+        self.preferences_dialog = None
 
         Gtk.IconTheme.get_default().append_search_path(get_pixmap_dir())
 
@@ -705,7 +706,9 @@ class MainWindow(Gtk.ApplicationWindow, Loggable):
             return False
 
     def _prefsCb(self, unused_action):
-        PreferencesDialog(self.app).run()
+        self.preferences_dialog = PreferencesDialog(self.app)
+        self.preferences_dialog.run()
+        self.preferences_dialog = None
 
 # Project management callbacks
 
