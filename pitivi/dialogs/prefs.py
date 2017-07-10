@@ -175,7 +175,8 @@ class PreferencesDialog(Loggable):
                             widgets.ToggleWidget)
 
     @classmethod
-    def addColorPreference(cls, attrname, label, description, section=None, value_type=int):
+    def addColorPreference(cls, attrname, label, description, section=None,
+                           value_type=Gdk.RGBA):
         """Adds a user preference for a color."""
         cls._add_preference(attrname, label, description, section,
                             widgets.ColorWidget, value_type=value_type)
@@ -439,7 +440,11 @@ class PreferencesDialog(Loggable):
 
         # convert the value of the widget to whatever type it is currently
         if value is not None:
-            value = type(value)(real_widget.getWidgetValue())
+            tmp_value = real_widget.getWidgetValue()
+            if type(value) != type(tmp_value):
+                value = type(value)(tmp_value)
+            else:
+                value = tmp_value
         setattr(self.settings, attrname, value)
 
         # adjust controls as appropriate

@@ -29,6 +29,7 @@ from gi.repository import Gdk
 from gi.repository import GLib
 from gi.repository import GObject
 from gi.repository import Gtk
+from gi.repository import Pango
 from utils import display_autocompletion
 from utils import FakeOut
 
@@ -48,6 +49,12 @@ class ConsoleWidget(Gtk.ScrolledWindow):
     DEFAULT_PROMPT = ">>> "
     PROMPT_INDENT = "... "
 
+    DEFAULT_COLOR = Gdk.RGBA(0.51, 0.39, 0.54, 1.0)
+    DEFAULT_ERROR_COLOR = Gdk.RGBA(0.96, 0.47, 0.0, 1.0)
+    DEFAULT_COMMAND_COLOR = Gdk.RGBA(0.2, 0.39, 0.64, 1.0)
+    DEFAULT_NORMAL_COLOR = Gdk.RGBA(0.05, 0.5, 0.66, 1.0)
+    DEFAULT_FONT = Pango.FontDescription.from_string("Monospace Regular 12")
+
     def __init__(self, namespace=None):
         Gtk.ScrolledWindow.__init__(self)
         self.__view = Gtk.TextView()
@@ -58,9 +65,9 @@ class ConsoleWidget(Gtk.ScrolledWindow):
         self.add(self.__view)
 
         buf = self.__view.get_buffer()
-        self.__normal = buf.create_tag("normal")
-        self.__error = buf.create_tag("error")
-        self.__command = buf.create_tag("command")
+        self.normal = buf.create_tag("normal")
+        self.error = buf.create_tag("error")
+        self.command = buf.create_tag("command")
 
         # Load the default settings
 
@@ -84,8 +91,8 @@ class ConsoleWidget(Gtk.ScrolledWindow):
         self.namespace['__history__'] = self.history
 
         # Set up hooks for standard output.
-        self.__stdout = FakeOut(self, self.__normal)
-        self.__stderr = FakeOut(self, self.__error)
+        self.__stdout = FakeOut(self, self.normal, sys.stdout.fileno())
+        self.__stderr = FakeOut(self, self.error, sys.stdout.fileno())
 
         # Signals
         self.__view.connect("key-press-event", self.__key_press_event_cb)
@@ -94,6 +101,60 @@ class ConsoleWidget(Gtk.ScrolledWindow):
 
         # Prompt
         self.prompt = ConsoleWidget.DEFAULT_PROMPT
+
+        self._provider = Gtk.CssProvider()
+
+        self._css_values = {
+            "textview": {
+                "font-family": ConsoleWidget.DEFAULT_FONT.get_family(),
+                "font-size": "%dpt" % int(ConsoleWidget.DEFAULT_FONT.get_size() / Pango.SCALE),
+                "font-style": ConsoleWidget.DEFAULT_FONT.get_style().value_nick,
+                "font-variant": ConsoleWidget.DEFAULT_FONT.get_variant().value_nick,
+                "font-weight": int(ConsoleWidget.DEFAULT_FONT.get_weight())
+            },
+            "textview > *": {
+                "color": ConsoleWidget.DEFAULT_COLOR.to_string()
+            }
+        }
+
+        self._init_default_colors()
+
+    def set_font(self, font_desc):
+        pango_font_desc = Pango.FontDescription.from_string(font_desc)
+        self._css_values["textview"]["font-family"] = pango_font_desc.get_family()
+        self._css_values["textview"]["font-size"] = "%dpt" % int(pango_font_desc.get_size() / Pango.SCALE)
+        self._css_values["textview"]["font-style"] = pango_font_desc.get_style().value_nick
+        self._css_values["textview"]["font-variant"] = pango_font_desc.get_variant().value_nick
+        self._css_values["textview"]["font-weight"] = int(pango_font_desc.get_weight())
+        self._apply_css()
+        self.error.set_property("font", font_desc)
+        self.command.set_property("font", font_desc)
+        self.normal.set_property("font", font_desc)
+
+    def set_color(self, color):
+        self._css_values["textview > *"]["color"] = color.to_string()
+        self._apply_css()
+
+    def _apply_css(self):
+        css = ""
+        for css_klass, props in self._css_values.items():
+            css += "%s {" % css_klass
+            for prop, value in props.items():
+                css += "%s: %s;" % (prop, value)
+            css += "} "
+        css = css.encode("UTF-8")
+        self._provider.load_from_data(css)
+        Gtk.StyleContext.add_provider(self.__view.get_style_context(),
+                                      self._provider,
+                                      Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
+
+    def _init_default_colors(self):
+        self.error.set_property("foreground-rgba",
+                                ConsoleWidget.DEFAULT_ERROR_COLOR)
+        self.command.set_property("foreground-rgba",
+                                  ConsoleWidget.DEFAULT_COMMAND_COLOR)
+        self.normal.set_property("foreground-rgba",
+                                 ConsoleWidget.DEFAULT_NORMAL_COLOR)
 
     def stop(self):
         self.namespace = None
@@ -140,7 +201,7 @@ class ConsoleWidget(Gtk.ScrolledWindow):
 
         # Make the line blue
         lin = buf.get_iter_at_mark(lin_mark)
-        buf.apply_tag(self.__command, lin, cur)
+        buf.apply_tag(self.command, lin, cur)
         buf.insert(cur, "\n")
 
         cur_strip = self.current_command.rstrip()
@@ -272,11 +333,12 @@ class ConsoleWidget(Gtk.ScrolledWindow):
         namespace = {
             "last": last,
             "matches": matches,
+            "buf": self.__view.get_buffer(),
             "display_autocompletion": display_autocompletion
         }
 
         self.__run(
-            "display_autocompletion(last, matches)",
+            "display_autocompletion(last, matches, buf)",
             namespace,
             self.namespace)
         if len(matches) > 1:
