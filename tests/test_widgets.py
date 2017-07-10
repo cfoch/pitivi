@@ -18,6 +18,7 @@
 # Boston, MA 02110-1301, USA.
 from unittest import TestCase
 
+from gi.repository import Gdk
 from gi.repository import Gst
 
 from pitivi.utils.widgets import ChoiceWidget
@@ -42,7 +43,7 @@ class TestWidgets(TestCase):
                 ("banana", "banana"),
                 ("apple", "apple"),
                 ("pear", "pear")),)),
-            (ColorWidget, 0x336699FF, (int,)),
+            (ColorWidget, Gdk.RGBA(0.5, 0.5, 0.3, 0.8), ()),
             (FontWidget, "Sans 9", ()))
 
         for widget_class, default, args in widgets:
