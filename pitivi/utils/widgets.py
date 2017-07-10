@@ -537,36 +537,35 @@ class ColorWidget(Gtk.ColorButton, DynamicWidget):
         Gtk.ColorButton.__init__(self)
         DynamicWidget.__init__(self, default)
         self.value_type = value_type
-        self.set_use_alpha(True)
+        self.props.use_alpha = True
 
     def connectValueChanged(self, callback, *args):
         self.connect("color-set", callback, *args)
 
     def setWidgetValue(self, value):
         type_ = type(value)
-        alpha = 0xFFFF
 
         if type_ is str:
-            color = Gdk.Color(value)
+            color = Gdk.RGBA.from_string(value)
         elif (type_ is int) or (type_ is int):
             red, green, blue, alpha = unpack_color(value)
-            color = Gdk.Color(red, green, blue)
-        elif type_ is Gdk.Color:
+            color = Gdk.RGBA(red / 255, green / 255, blue / 255, alpha / 255)
+        elif type_ is Gdk.RGBA:
             color = value
         else:
             raise TypeError("%r is not something we can convert to a color" %
                             value)
-        self.set_color(color)
-        self.set_alpha(alpha)
+        self.set_rgba(color)
 
     def getWidgetValue(self):
-        color = self.get_color()
-        alpha = self.get_alpha()
+        color = self.get_rgba()
         if self.value_type is int:
-            return pack_color_32(color.red, color.green, color.blue, alpha)
+            return pack_color_32(int(color.red * 255), int(color.green * 255),
+                                 int(color.blue * 255), int(color.alpha * 255))
         if self.value_type is int:
-            return pack_color_64(color.red, color.green, color.blue, alpha)
-        elif self.value_type is Gdk.Color:
+            return pack_color_64(int(color.red * 255), int(color.green * 255),
+                                 int(color.blue * 255), int(color.alpha * 255))
+        elif self.value_type is Gdk.RGBA:
             return color
         return color.to_string()
 
