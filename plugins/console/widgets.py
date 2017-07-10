@@ -30,6 +30,7 @@ from gi.repository import Gdk
 from gi.repository import GLib
 from gi.repository import GObject
 from gi.repository import Gtk
+from gi.repository import Pango
 from utils import display_autocompletion
 from utils import FakeOut
 
@@ -59,9 +60,9 @@ class ConsoleWidget(Gtk.ScrolledWindow):
         self.add(self.__view)
 
         buf = self.__view.get_buffer()
-        self.__normal = buf.create_tag("normal")
-        self.__error = buf.create_tag("error")
-        self.__command = buf.create_tag("command")
+        self.normal = buf.create_tag("normal")
+        self.error = buf.create_tag("error")
+        self.command = buf.create_tag("command")
 
         # Load the default settings
 
@@ -85,8 +86,8 @@ class ConsoleWidget(Gtk.ScrolledWindow):
         self.namespace['__history__'] = self.history
 
         # Set up hooks for standard output.
-        self.__stdout = FakeOut(self, self.__normal)
-        self.__stderr = FakeOut(self, self.__error)
+        self.__stdout = FakeOut(self, self.normal, sys.stdout.fileno())
+        self.__stderr = FakeOut(self, self.error, sys.stdout.fileno())
 
         # Signals
         self.__view.connect("key-press-event", self.__key_press_event_cb)
@@ -95,6 +96,61 @@ class ConsoleWidget(Gtk.ScrolledWindow):
 
         # Prompt
         self.prompt = ConsoleWidget.DEFAULT_PROMPT
+
+        self._provider = Gtk.CssProvider()
+
+        self._css_values = {
+            "textview": {
+                "font-family": None,
+                "font-size": None,
+                "font-style": None,
+                "font-variant": None,
+                "font-weight": None
+            },
+            "textview > *": {
+                "color": None
+            }
+        }
+
+    def set_font(self, font_desc):
+        """Sets the font.
+
+        Args:
+            font (str): a PangoFontDescription as a string.
+        """
+        pango_font_desc = Pango.FontDescription.from_string(font_desc)
+        self._css_values["textview"]["font-family"] = pango_font_desc.get_family()
+        self._css_values["textview"]["font-size"] = "%dpt" % int(pango_font_desc.get_size() / Pango.SCALE)
+        self._css_values["textview"]["font-style"] = pango_font_desc.get_style().value_nick
+        self._css_values["textview"]["font-variant"] = pango_font_desc.get_variant().value_nick
+        self._css_values["textview"]["font-weight"] = int(pango_font_desc.get_weight())
+        self._apply_css()
+        self.error.set_property("font", font_desc)
+        self.command.set_property("font", font_desc)
+        self.normal.set_property("font", font_desc)
+
+    def set_color(self, color):
+        """Sets the color.
+
+        Args:
+            color (Gdk.RGBA): a color.
+        """
+        self._css_values["textview > *"]["color"] = color.to_string()
+        self._apply_css()
+
+    def _apply_css(self):
+        css = ""
+        for css_klass, props in self._css_values.items():
+            css += "%s {" % css_klass
+            for prop, value in props.items():
+                if value is not None:
+                    css += "%s: %s;" % (prop, value)
+            css += "} "
+        css = css.encode("UTF-8")
+        self._provider.load_from_data(css)
+        Gtk.StyleContext.add_provider(self.__view.get_style_context(),
+                                      self._provider,
+                                      Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
 
     def __key_press_event_ctrl_return_cb(self, view, unused_event):
         # pylint: disable=invalid-name
@@ -138,7 +194,7 @@ class ConsoleWidget(Gtk.ScrolledWindow):
 
         # Make the line blue
         lin = buf.get_iter_at_mark(lin_mark)
-        buf.apply_tag(self.__command, lin, cur)
+        buf.apply_tag(self.command, lin, cur)
         buf.insert(cur, "\n")
 
         cur_strip = self.current_command.rstrip()
@@ -271,11 +327,12 @@ class ConsoleWidget(Gtk.ScrolledWindow):
         namespace = {
             "last": last,
             "matches": matches,
+            "buf": self.__view.get_buffer(),
             "display_autocompletion": display_autocompletion
         }
 
         self.__run(
-            "display_autocompletion(last, matches)",
+            "display_autocompletion(last, matches, buf)",
             namespace,
             self.namespace)
         if len(matches) > 1:

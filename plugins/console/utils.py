@@ -20,12 +20,12 @@
 from io import TextIOBase
 
 
-def display_autocompletion(last_obj, matches):
+def display_autocompletion(last_obj, matches, text_buffer):
     """Print possible matches (to FakeOut)."""
     if len(matches) == 1:
         tokens = matches[0].split(last_obj)
         if len(tokens) >= 1:
-            print(tokens[1], end='')
+            text_buffer.insert(text_buffer.get_end_iter(), tokens[1])
     elif len(matches) > 1:
         print()
         for match in matches:
@@ -33,10 +33,12 @@ def display_autocompletion(last_obj, matches):
 
 
 class FakeOut(TextIOBase):
-    def __init__(self, console, tag):
+    def __init__(self, console, tag, fn):
         TextIOBase.__init__(self)
         self.console = console
         self.tag = tag
+        # pylint: disable=invalid-name
+        self.fn = fn
 
     def write(self, string):
         self.console.write(string, self.tag)
