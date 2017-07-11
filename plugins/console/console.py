@@ -22,9 +22,67 @@ from gettext import gettext as _
 from gi.repository import GObject
 from gi.repository import Gtk
 from gi.repository import Peas
+from utils import Namespace
 from widgets import ConsoleWidget
 
 from pitivi.dialogs.prefs import PreferencesDialog
+
+
+class PitiviNamespace(Namespace):
+    """A class to define public objects in the namespace."""
+
+    def __init__(self, app):
+        Namespace.__init__(self)
+        self._app = app
+
+    @property
+    @Namespace.shortcut
+    def app(self):
+        """Gets the internal Pitivi Main Application object."""
+        return self._app
+
+    @property
+    @Namespace.shortcut
+    def plugin_manager(self):
+        """Gets the internal Pitivi Plugin Manager."""
+        return self._app.plugin_manager
+
+    @property
+    @Namespace.shortcut
+    def timeline(self):
+        """Gets the internal GES.Timeline."""
+        return self._app.gui.timeline_ui.timeline.ges_timeline
+
+    @Namespace.shortcut
+    def get_layers(self):
+        """Gets the internal list of GES.Layer."""
+        return self._app.gui.timeline_ui.timeline.ges_timeline.get_layers()
+
+    @Namespace.shortcut
+    def get_extension(self, module_name):
+        """Gets the extensions added to the Pitivi Plugin Manager.
+
+        Args:
+            module_name (str): The option that belongs to the `section`.
+        Returns:
+            The extension if exists. Otherwise, `None`.
+        """
+        for plugin in self._app.plugin_manager.get_plugins():
+            if plugin.get_module_name() == module_name:
+                return self._app.plugin_manager.extension_set.get_extension(plugin)
+        return None
+
+    @property
+    @Namespace.shortcut
+    def shortcuts(self):
+        """Gets the available methods in the namespace."""
+        print(_("These are the available methods or attributes."))
+        print()
+        for attr in self.get_shortcuts():
+            print(" - %s" % attr)
+        print()
+        print(_("Type \"{help}(<shortcut_command>)\" for more information.")
+              .format(help="help"))
 
 
 class Console(GObject.GObject, Peas.Activatable):
@@ -34,6 +92,9 @@ class Console(GObject.GObject, Peas.Activatable):
 
     MENU_LABEL = "Developer Console"
     TITLE = "Pitivi Console"
+    _WELCOME_MESSAGE = _("{name} {version}\n\n"
+                         "Type \"{shortcuts}\" to list available methods.\n"
+                         "For more information, visit {help_uri}\n\n")
 
     def __init__(self):
         GObject.GObject.__init__(self)
@@ -116,7 +177,7 @@ class Console(GObject.GObject, Peas.Activatable):
         if self.app.gui.preferences_dialog is not None:
             self.app.gui.preferences_dialog.add_settings_section("console")
 
-        namespace = {"app": self.app}
+        namespace = PitiviNamespace(self.app)
         self._setup_dialog(namespace)
         self.add_menu_item()
         self.menu_item.show()
@@ -153,7 +214,13 @@ class Console(GObject.GObject, Peas.Activatable):
 
     def _setup_dialog(self, namespace):
         self.window = Gtk.Window.new(Gtk.WindowType.TOPLEVEL)
-        self.terminal = ConsoleWidget(namespace)
+        console_plugin_info = self.app.plugin_manager.get_plugin_info("console")
+        welcome_message = Console._WELCOME_MESSAGE.format(
+            name=console_plugin_info.get_name(),
+            shortcuts=PitiviNamespace.shortcuts.fget.__name__,
+            version=console_plugin_info.get_version() or "",
+            help_uri=console_plugin_info.get_help_uri())
+        self.terminal = ConsoleWidget(namespace, welcome_message)
 
         self._init_colors()
         self.terminal.set_font(self.app.settings.consoleFont)

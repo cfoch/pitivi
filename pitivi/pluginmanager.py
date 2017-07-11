@@ -62,6 +62,20 @@ class PluginManager:
         """Gets the engine's plugin list."""
         return self.engine.get_plugin_list()
 
+    def get_plugin_info(self, module_name):
+        """Gets the plugin info given a `name`.
+
+        Args:
+            module_name (str): The module name as registered in the .plugin file.
+        Returns:
+            Peas.PluginInfo: The plugin info if it exists. Otherwise, returns
+                             `None`.
+        """
+        for plugin_info in self.get_plugins():
+            if plugin_info.get_module_name() == module_name:
+                return plugin_info
+        return None
+
     def _load_plugins_from_settings(self):
         plugin_names = self.app.settings.PluginsActivePlugins
         for plugin_name in plugin_names:

@@ -32,6 +32,7 @@ from gi.repository import Gtk
 from gi.repository import Pango
 from utils import display_autocompletion
 from utils import FakeOut
+from utils import Namespace
 
 
 class ConsoleWidget(Gtk.ScrolledWindow):
@@ -55,7 +56,7 @@ class ConsoleWidget(Gtk.ScrolledWindow):
     DEFAULT_NORMAL_COLOR = Gdk.RGBA(0.05, 0.5, 0.66, 1.0)
     DEFAULT_FONT = Pango.FontDescription.from_string("Monospace Regular 12")
 
-    def __init__(self, namespace=None):
+    def __init__(self, namespace=None, welcome_message=None):
         Gtk.ScrolledWindow.__init__(self)
         self.__view = Gtk.TextView()
 
@@ -80,6 +81,10 @@ class ConsoleWidget(Gtk.ScrolledWindow):
         self.block_command = False
 
         # Init first line
+        if welcome_message is not None:
+            buf.insert_with_tags(buf.get_end_iter(), welcome_message,
+                                 self.normal)
+
         buf.create_mark("input-line", buf.get_end_iter(), True)
         buf.insert(buf.get_end_iter(), ConsoleWidget.DEFAULT_PROMPT)
         buf.create_mark("input", buf.get_end_iter(), True)
@@ -478,7 +483,10 @@ class ConsoleWidget(Gtk.ScrolledWindow):
                 if eval_result is not None:
                     print(eval_result)
             except SyntaxError:
-                exec(command, self.namespace)
+                try:
+                    exec(command, self.namespace)
+                except Namespace.AttributeReadOnlyException as ex:
+                    sys.stderr.write("%s\n" % str(ex))
         except:
             if hasattr(sys, 'last_type') and sys.last_type == SystemExit:
                 self.destroy()
