@@ -20,6 +20,7 @@
 #
 # This widget is based on Gedit's pythonconsole plugin
 import builtins
+import os
 import re
 import sys
 import traceback
@@ -334,20 +335,22 @@ class ConsoleWidget(Gtk.ScrolledWindow):
         return ret
 
     def show_autocompletion(self, command):
-        matches, last = self.get_autocompletion_matches(command)
+        matches, last, new_command = self.get_autocompletion_matches(command)
         namespace = {
             "last": last,
             "matches": matches,
             "buf": self.__view.get_buffer(),
+            "command": command,
+            "new_command": new_command,
             "display_autocompletion": display_autocompletion
         }
 
         self.__run(
-            "display_autocompletion(last, matches, buf)",
+            "display_autocompletion(last, matches, buf, command, new_command)",
             namespace,
             self.namespace)
         if len(matches) > 1:
-            self.__refresh_prompt(command)
+            self.__refresh_prompt(new_command)
 
     def __refresh_prompt(self, text=""):
 
@@ -369,36 +372,42 @@ class ConsoleWidget(Gtk.ScrolledWindow):
         GLib.idle_add(self.scroll_to_end)
         return True
 
-    def get_autocompletion_matches(self, text):
+    def get_autocompletion_matches(self, input_text):
         """
         Given an input text, return possible matches for autocompletion.
         """
-        # pylint: disable=bare-except, eval-used
-        identifiers = re.findall(r'[_A-Za-z][\w\.]*\w$', text)
+        # pylint: disable=bare-except, eval-used, too-many-branches
+        # Try to get the possible full object to scan.
+        # For example, if input_text is "func(circle.ra", we obtain "circle.ra".
+        identifiers = re.findall(r'[_A-Za-z][\w\.]*\w$', input_text)
         if identifiers:
-            text = identifiers[0]
-
-        pos = text.rfind(".")
-        if pos != -1:
-            cmd = text[:pos]
+            maybe_scannable_object = identifiers[0]
         else:
-            cmd = text
-        namespace = {"cmd": cmd}
+            maybe_scannable_object = input_text
+
+        pos = maybe_scannable_object.rfind(".")
+        if pos != -1:
+            # In this case, we cannot scan "circle.ra", so we scan "circle".
+            scannable_object = maybe_scannable_object[:pos]
+        else:
+            # This is the case when input was more simple, like "circ".
+            scannable_object = maybe_scannable_object
+        namespace = {"scannable_object": scannable_object}
         try:
             if pos != -1:
-                str_eval = "dir(eval(cmd))"
+                str_eval = "dir(eval(scannable_object))"
             else:
                 str_eval = "dir()"
-            matches = eval(str_eval, namespace, self.namespace)
+            maybe_matches = eval(str_eval, namespace, self.namespace)
         except:
-            return [], text
+            return [], maybe_scannable_object, input_text
         if pos != -1:
             # Get substring after last dot (.)
-            rest = text[(pos + 1):]
+            rest = maybe_scannable_object[(pos + 1):]
         else:
-            rest = cmd
+            rest = scannable_object
         # First, assume we are parsing an object.
-        matches = [match for match in matches if match.startswith(rest)]
+        matches = [match for match in maybe_matches if match.startswith(rest)]
 
         # If not matches, maybe it is a keyword or builtin function.
         if not matches:
@@ -406,7 +415,17 @@ class ConsoleWidget(Gtk.ScrolledWindow):
             matches = [
                 match for match in tmp_matches if match.startswith(rest)]
 
-        return matches, rest
+        if not matches:
+            new_input_text = input_text
+        else:
+            maybe_scannable_pos = input_text.find(maybe_scannable_object)
+            common = os.path.commonprefix(matches)
+            if pos == -1:
+                new_input_text = input_text[:maybe_scannable_pos] + common
+            else:
+                new_input_text = input_text[:maybe_scannable_pos] + maybe_scannable_object[:pos] + "." + common
+
+        return matches, rest, new_input_text
 
     def __mark_set_cb(self, buf, it, name):
         input_mark = buf.get_iter_at_mark(buf.get_mark("input"))
