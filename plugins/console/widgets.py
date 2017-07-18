@@ -141,6 +141,21 @@ class ConsoleWidget(Gtk.ScrolledWindow):
         self._css_values["textview > *"]["color"] = color.to_string()
         self._apply_css()
 
+    def cursor_at_editable_area(self):
+        """
+        Returns if the cursor is in an editable area, after the PROMPT symbol.
+        """
+        buf = self.__view.get_buffer()
+        cur_pos_offset = buf.get_property("cursor-position")
+        ins = buf.get_iter_at_mark(buf.get_mark("input"))
+        return cur_pos_offset >= ins.get_offset()
+
+    def move_cursor_to_end(self):
+        buf = self.__view.get_buffer()
+        it = buf.get_end_iter()
+        it.forward_to_end()
+        buf.place_cursor(it)
+
     def _apply_css(self):
         css = ""
         for css_klass, props in self._css_values.items():
@@ -237,6 +252,10 @@ class ConsoleWidget(Gtk.ScrolledWindow):
         return True
 
     def __key_press_event_down_cb(self, view, event):
+        # If we are in a non-editable area, we just go down instead of
+        # looking up in the history.
+        if not self.cursor_at_editable_area():
+            return False
         # Next entry from history
         view.stop_emission_by_name("key_press_event")
         self.history_down()
@@ -244,14 +263,35 @@ class ConsoleWidget(Gtk.ScrolledWindow):
         return True
 
     def __key_press_event_up_cb(self, view, event):
+        # If we are in a non-editable area, we just go up instead of
+        # looking up in the history.
+        if not self.cursor_at_editable_area():
+            return False
         # Previous entry from history
         view.stop_emission_by_name("key_press_event")
         self.history_up()
         GLib.idle_add(self.scroll_to_end)
         return True
 
+    def __key_press_event_right_cb(self, view, event):
+        if not self.cursor_at_editable_area():
+            return False
+        return Gtk.TextView.do_key_press_event(view, event)
+
     def __key_press_event_left_cb(self, view, event):
         # pylint: disable=no-self-use
+        if not self.cursor_at_editable_area():
+            if event.keyval == Gdk.KEY_BackSpace:
+                # It does not make sense to delete something in a non-editable
+                # area, so go to the editable area, and process backspace key
+                # by default.
+                self.move_cursor_to_end()
+                return Gtk.TextView.do_key_press_event(view, event)
+        else:
+            if event.keyval == Gdk.KEY_Left:
+                # Use default behavior.
+                return False
+
         modifier_mask = Gtk.accelerator_get_default_mod_mask()
         event_state = event.state & modifier_mask
         buf = view.get_buffer()
@@ -308,6 +348,30 @@ class ConsoleWidget(Gtk.ScrolledWindow):
             buf.place_cursor(it)
         return True
 
+    def __key_press_event_cursor_end_cb(self, view, event):
+        """Inserts input key at the end when typing in a non-editable area."""
+        # pylint: disable=no-self-use
+        modifier_mask = Gtk.accelerator_get_default_mod_mask()
+        event_state = event.state & modifier_mask
+
+        # Yes, it is hard-coded but I did not find other way. I try to handle
+        # all the cases I could find. For example, cases like ctrl+c, ctrl+v...
+        # in which we don't want to put the cursor at the end, because it would
+        # erase selection.
+
+        if event.keyval == Gdk.KEY_Control_L or event.keyval == Gdk.KEY_Control_R:
+            ret = Gtk.TextView.do_key_press_event(view, event)
+        elif event.keyval in (Gdk.KEY_x, Gdk.KEY_c, Gdk.KEY_v, Gdk.KEY_a, Gdk.KEY_a) and\
+                event_state == Gdk.ModifierType.CONTROL_MASK:
+            ret = Gtk.TextView.do_key_press_event(view, event)
+        else:
+            ret = not self.cursor_at_editable_area()
+            if ret:
+                self.move_cursor_to_end()
+                buf = view.get_buffer()
+                buf.insert(buf.get_end_iter(), event.string)
+        return ret
+
     def __key_press_event_cb(self, view, event):
         modifier_mask = Gtk.accelerator_get_default_mod_mask()
         event_state = event.state & modifier_mask
@@ -321,6 +385,8 @@ class ConsoleWidget(Gtk.ScrolledWindow):
             ret = self.__key_press_event_down_cb(view, event)
         elif event.keyval == Gdk.KEY_KP_Up or event.keyval == Gdk.KEY_Up:
             ret = self.__key_press_event_up_cb(view, event)
+        elif event.keyval == Gdk.KEY_KP_Up or event.keyval == Gdk.KEY_Right:
+            ret = self.__key_press_event_right_cb(view, event)
         elif event.keyval == Gdk.KEY_KP_Left or event.keyval == Gdk.KEY_Left or \
                 event.keyval == Gdk.KEY_BackSpace:
             ret = self.__key_press_event_left_cb(view, event)
@@ -332,6 +398,8 @@ class ConsoleWidget(Gtk.ScrolledWindow):
         elif (event.keyval == Gdk.KEY_KP_End or event.keyval == Gdk.KEY_End) and \
                 event_state == event_state & (Gdk.ModifierType.SHIFT_MASK | Gdk.ModifierType.CONTROL_MASK):
             ret = self.__key_press_event_ctrl_end_cb(view, event)
+        else:
+            ret = self.__key_press_event_cursor_end_cb(view, event)
         return ret
 
     def show_autocompletion(self, command):
